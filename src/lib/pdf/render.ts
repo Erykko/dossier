@@ -31,18 +31,33 @@ type Pool = {
 const globalForPdf = globalThis as unknown as { pdfPool?: Pool };
 const pool: Pool = (globalForPdf.pdfPool ??= { browser: null, active: 0, queue: [], idleTimer: null });
 
-/** Where the app itself is listening, for Chromium to open print pages. */
+/**
+ * Where the app itself is listening, for Chromium to open print pages. A
+ * Vercel function can't reach itself on localhost, so there it's the
+ * public address.
+ */
 function appOrigin(): string {
+  if (process.env.VERCEL) {
+    const url = process.env.DOSSIER_PUBLIC_URL ?? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+    return new URL(url).origin;
+  }
   return `http://localhost:${process.env.PORT ?? 3000}`;
+}
+
+/** Vercel has no Chromium of its own: @sparticuz/chromium brings one built for it. */
+async function launchOptions(): Promise<Parameters<typeof chromium.launch>[0]> {
+  if (!process.env.VERCEL) {
+    // Docker gives /dev/shm only 64 MB.
+    return { args: ["--disable-dev-shm-usage"] };
+  }
+  const { default: serverless } = await import("@sparticuz/chromium");
+  return { args: serverless.args, executablePath: await serverless.executablePath(), headless: true };
 }
 
 function browser(): Promise<Browser> {
   if (!pool.browser) {
-    const launching = chromium
-      .launch({
-        // Docker gives /dev/shm only 64 MB.
-        args: ["--disable-dev-shm-usage"],
-      })
+    const launching = launchOptions()
+      .then((options) => chromium.launch(options))
       .then((launched) => {
         // A crashed or closed browser is replaced on the next render.
         launched.on("disconnected", () => {

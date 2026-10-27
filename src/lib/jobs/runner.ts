@@ -1,5 +1,6 @@
 import "server-only";
 
+import { waitUntil } from "@vercel/functions";
 import type { z } from "zod";
 
 import { Prisma } from "@/generated/prisma/client";
@@ -13,8 +14,10 @@ import { prisma } from "@/lib/prisma";
 // Long AI tasks run as background jobs (E6-7): the request that starts one
 // returns at once with its id, the work goes on in this process, and the
 // page follows its named steps (/api/jobs/[id]/events). Progress lives in
-// the Job table, so a reloaded page can pick the job up again. Dossier runs
-// as a single instance, so an in-process queue is enough.
+// the Job table, so a reloaded page can pick the job up again. The queue is
+// per process; on Vercel, waitUntil() keeps the function that queued a job
+// alive until it ends, and cancelling goes through the Job row, so another
+// instance's job stops at its next step.
 
 export type JobContext = {
   /** The job's own id, e.g. to link it to the application it makes. */
@@ -53,6 +56,9 @@ export const JOB_MESSAGES = {
 } as const;
 
 /** Jobs at once: local models do best with one request at a time (PRD §11). */
+/** Older than any Vercel function may run (300 s), so no instance is still on it. */
+export const STALE_JOB_MS = 15 * 60_000;
+
 const LOCAL_CONCURRENCY = 1;
 const HOSTED_CONCURRENCY = 3;
 
@@ -63,6 +69,8 @@ type RunnerState = {
   queue: string[];
   running: Map<string, AbortController>;
   listeners: Map<string, Set<Listener>>;
+  /** Resolves the promise waitUntil() holds for each queued or running job. */
+  waiters: Map<string, () => void>;
   pumping: boolean;
 };
 
@@ -73,6 +81,7 @@ const state: RunnerState = (globalForJobs.jobRunner ??= {
   queue: [],
   running: new Map(),
   listeners: new Map(),
+  waiters: new Map(),
   pumping: false,
 });
 
@@ -146,10 +155,14 @@ export async function cancelJob(id: string): Promise<void> {
   const queued = state.queue.indexOf(id);
   if (queued >= 0) {
     state.queue.splice(queued, 1);
+    settle(id);
     await finish(id, { status: JobStatus.FAILED, error: JOB_MESSAGES.cancelled });
     return;
   }
-  state.running.get(id)?.abort();
+  const running = state.running.get(id);
+  if (running) return running.abort();
+  // Queued or running in another instance: it sees this at its next step.
+  await finish(id, { status: JobStatus.FAILED, error: JOB_MESSAGES.cancelled });
 }
 
 /** Stops every queued or running job that works on an application, e.g. before it's deleted. */
@@ -184,13 +197,25 @@ async function finish(
   id: string,
   data: { status: JobStatus; result?: Prisma.InputJsonValue; error?: string },
 ): Promise<void> {
-  const { count } = await prisma.job.updateMany({ where: { id }, data: { ...data, finishedAt: new Date() } });
+  // A job that already ended (cancelled from another instance) keeps that ending.
+  const { count } = await prisma.job.updateMany({
+    where: { id, status: { in: [JobStatus.QUEUED, JobStatus.RUNNING] } },
+    data: { ...data, finishedAt: new Date() },
+  });
   if (count > 0) await notify(id);
 }
 
 function enqueue(id: string): void {
-  if (!state.queue.includes(id)) state.queue.push(id);
+  if (!state.queue.includes(id)) {
+    state.queue.push(id);
+    waitUntil(new Promise<void>((resolve) => state.waiters.set(id, resolve)));
+  }
   void pump();
+}
+
+function settle(id: string): void {
+  state.waiters.get(id)?.();
+  state.waiters.delete(id);
 }
 
 async function concurrency(): Promise<number> {
@@ -212,6 +237,7 @@ async function pump(): Promise<void> {
       state.running.set(id, controller);
       void execute(id, controller).finally(() => {
         state.running.delete(id);
+        settle(id);
         void pump();
       });
     }
@@ -222,11 +248,13 @@ async function pump(): Promise<void> {
 
 async function execute(id: string, controller: AbortController): Promise<void> {
   try {
-    const job = await prisma.job.update({
-      where: { id },
+    const { count } = await prisma.job.updateMany({
+      where: { id, status: JobStatus.QUEUED },
       data: { status: JobStatus.RUNNING, startedAt: new Date() },
-      select: { type: true, input: true },
     });
+    // Cancelled or deleted while it waited.
+    if (count === 0) return;
+    const job = await prisma.job.findUniqueOrThrow({ where: { id }, select: { type: true, input: true } });
     await notify(id);
     // Job types register when their module loads; make sure they all have.
     await import("./definitions");
@@ -237,8 +265,8 @@ async function execute(id: string, controller: AbortController): Promise<void> {
       id,
       signal: controller.signal,
       step: async (name) => {
-        // Deleted meanwhile: there's no one left to do it for.
-        const { count } = await prisma.job.updateMany({ where: { id }, data: { step: name } });
+        // Deleted or cancelled meanwhile: there's no one left to do it for.
+        const { count } = await prisma.job.updateMany({ where: { id, status: JobStatus.RUNNING }, data: { step: name } });
         if (count === 0) controller.abort();
         else await notify(id);
       },
@@ -257,12 +285,18 @@ async function execute(id: string, controller: AbortController): Promise<void> {
 }
 
 /**
- * Called once at startup: jobs a previous process left queued or running
- * can't finish, so they're marked failed and the page offers Retry.
+ * Called at startup: jobs a previous process left queued or running can't
+ * finish, so they're marked failed and the page offers Retry. With
+ * `olderThanMs` (on Vercel, where other instances are still working), only
+ * jobs that have outlived any function are.
  */
-export async function recoverInterruptedJobs(): Promise<number> {
+export async function recoverInterruptedJobs(olderThanMs?: number): Promise<number> {
+  const before = olderThanMs === undefined ? undefined : new Date(Date.now() - olderThanMs);
   const { count } = await prisma.job.updateMany({
-    where: { status: { in: [JobStatus.QUEUED, JobStatus.RUNNING] } },
+    where: {
+      status: { in: [JobStatus.QUEUED, JobStatus.RUNNING] },
+      ...(before && { OR: [{ startedAt: { lt: before } }, { startedAt: null, createdAt: { lt: before } }] }),
+    },
     data: { status: JobStatus.FAILED, error: JOB_MESSAGES.interrupted, finishedAt: new Date() },
   });
   return count;

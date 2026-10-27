@@ -5,6 +5,11 @@ import { route } from "@/lib/route";
 
 /** Keeps proxies from closing a quiet stream while a local model thinks. */
 const HEARTBEAT_MS = 15_000;
+/**
+ * How often the Job row is read again. On Vercel the job usually runs in
+ * another instance, whose changes this one's listeners never hear of.
+ */
+const POLL_MS = 1_500;
 
 /**
  * A job's progress as Server-Sent Events (E6-7): its state now, then after
@@ -19,17 +24,27 @@ export const GET = route<RouteContext<"/api/jobs/[id]/events">>(async (request, 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let closed = false;
+      let last = "";
       const heartbeat = setInterval(() => controller.enqueue(encoder.encode(": still working\n\n")), HEARTBEAT_MS);
+      const poll = setInterval(() => {
+        void getJob(id)
+          .then((job) => (job ? send(job) : stop()))
+          .catch(() => {});
+      }, POLL_MS);
       stop = () => {
         if (closed) return;
         closed = true;
         clearInterval(heartbeat);
+        clearInterval(poll);
         unsubscribe();
         controller.close();
       };
       const send = (job: JobView) => {
         if (closed) return;
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(job)}\n\n`));
+        const data = JSON.stringify(job);
+        if (data === last) return;
+        last = data;
+        controller.enqueue(encoder.encode(`data: ${data}\n\n`));
         if (isFinished(job)) stop();
       };
       // Listen before reading, so a change in between isn't missed.

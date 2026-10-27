@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": [
+    "fra1"
+  ],
+  "installCommand": "yarn install --immutable",
+  "buildCommand": "yarn prisma generate && yarn build",
+  "crons": [
+    {
+      "path": "/api/cron/daily",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}

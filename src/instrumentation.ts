@@ -5,30 +5,36 @@ export async function register() {
     const { checkEnvOnStartup } = await import("@/lib/env");
     checkEnvOnStartup();
 
-    // AI jobs left running by the previous process can't finish (E6-7).
-    const { recoverInterruptedJobs } = await import("@/lib/jobs/runner");
+    // AI jobs left running by the previous process can't finish (E6-7). On
+    // Vercel other instances are still working, so only jobs older than any
+    // function can live are; the daily cron (/api/cron/daily) stands in for
+    // the timers below.
+    const { recoverInterruptedJobs, STALE_JOB_MS } = await import("@/lib/jobs/runner");
     const { logServerError } = await import("@/lib/log");
-    await recoverInterruptedJobs().catch((error: unknown) => logServerError("startup", error));
+    const onVercel = Boolean(process.env.VERCEL);
+    await recoverInterruptedJobs(onVercel ? STALE_JOB_MS : undefined).catch((error: unknown) => logServerError("startup", error));
 
-    // Finished jobs, with what they were given and wrote, are deleted after a while.
-    const { startJobSweep } = await import("@/lib/jobs/retention");
-    startJobSweep();
+    if (!onVercel) {
+      // Finished jobs, with what they were given and wrote, are deleted after a while.
+      const { startJobSweep } = await import("@/lib/jobs/retention");
+      startJobSweep();
 
-    // Nightly backups at 03:00, while they're switched on (E10-7).
-    const { startBackupSchedule } = await import("@/lib/backup-schedule");
-    startBackupSchedule();
+      // Nightly backups at 03:00, while they're switched on (E10-7).
+      const { startBackupSchedule } = await import("@/lib/backup-schedule");
+      startBackupSchedule();
 
-    // The inbox check, while a Google account is connected (E15-3).
-    const { startInboxSchedule } = await import("@/lib/google/sync");
-    startInboxSchedule();
+      // The inbox check, while a Google account is connected (E15-3).
+      const { startInboxSchedule } = await import("@/lib/google/sync");
+      startInboxSchedule();
 
-    // The job agent's daily run, while it's on (E16-4).
-    const { startAgentSchedule } = await import("@/lib/agent/schedule");
-    startAgentSchedule();
+      // The job agent's daily run, while it's on (E16-4).
+      const { startAgentSchedule } = await import("@/lib/agent/schedule");
+      startAgentSchedule();
 
-    // Startups' daily refresh, once it was refreshed by hand and while the screen is in use (#222).
-    const { startStartupsSchedule } = await import("@/lib/startups/schedule");
-    startStartupsSchedule();
+      // Startups' daily refresh, once it was refreshed by hand and while the screen is in use (#222).
+      const { startStartupsSchedule } = await import("@/lib/startups/schedule");
+      startStartupsSchedule();
+    }
 
     // DOSSIER_JOBS_SOURCE=arbeitsagentur: the log says what that choice means (#223).
     const { arbeitsagenturStartupNotice, loadJobSearchConfig } = await import("@/lib/job-search/config");

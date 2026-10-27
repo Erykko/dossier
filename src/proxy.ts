@@ -68,9 +68,10 @@ function pass(request: NextRequest): NextResponse {
 
 export const config = {
   matcher: [
-    // Everything except the health check, Next.js' own assets (scripts,
+    // Everything except the health check, Vercel's cron (it checks
+    // CRON_SECRET itself), Next.js' own assets (scripts,
     // styles, fonts, images), the dev server's hot-reload socket and public
     // files.
-    "/((?!api/health(?:/|$)|_next/static/|_next/image|_next/hmr|favicon\\.ico$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt)$).*)",
+    "/((?!api/health(?:/|$)|api/cron/|_next/static/|_next/image|_next/hmr|favicon\\.ico$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt)$).*)",
   ],
 };
