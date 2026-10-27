@@ -105,9 +105,12 @@ function release(): void {
  */
 export async function renderPdf(path: string): Promise<Uint8Array> {
   await acquire();
+  // Vercel freezes an instance between requests, and a browser kept from an
+  // earlier one hangs when it thaws: there each render gets its own.
+  const own = process.env.VERCEL ? launchOptions().then((options) => chromium.launch(options)) : null;
   try {
     const origin = appOrigin();
-    const context = await (await browser()).newContext({
+    const context = await (await (own ?? browser())).newContext({
       extraHTTPHeaders: { [PRINT_TOKEN_HEADER]: await signPrintToken(path) },
     });
     try {
@@ -123,6 +126,7 @@ export async function renderPdf(path: string): Promise<Uint8Array> {
       await context.close();
     }
   } finally {
+    await own?.then((launched) => launched.close()).catch(() => {});
     release();
   }
 }

@@ -9,6 +9,8 @@ import { loadProfileName } from "@/lib/profile-data";
 import { loadSettings } from "@/lib/settings-data";
 import { route } from "@/lib/route";
 
+export const maxDuration = 120;
+
 /** The documents an application can download, by their `doc=` value. */
 const TAILORED = { resume: DocumentKind.RESUME, letter: DocumentKind.COVER_LETTER } as const;
 
@@ -36,6 +38,9 @@ export const GET = route(async (request) => {
 export const POST = route(async (request) => {
   const rendered = await renderRequested(request);
   if (rendered instanceof Response) return rendered;
+  // On Vercel the held PDF stays in this instance's memory, which the
+  // download rarely reaches: link to the GET, which renders it again.
+  if (process.env.VERCEL) return NextResponse.json({ url: `${request.nextUrl.pathname}${request.nextUrl.search}` });
   return NextResponse.json({ url: `/api/pdf/${holdPdf(rendered.pdf, rendered.fileName)}` });
 });
 
