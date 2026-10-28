@@ -8,6 +8,7 @@ import { toast } from "@/components/toast";
 import { Button, buttonClassName } from "@/components/ui/button";
 import type { Unit } from "@/lib/application-data";
 import { emailParts, mailtoHref } from "@/lib/application-email";
+import { COPY_SKIP } from "@/lib/clean-copy";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/copy-text";
 
@@ -155,7 +156,14 @@ function Field({ label, onCopy, children }: { label: string; onCopy?: () => void
       <span className="w-14 shrink-0 text-meta text-muted">{label}</span>
       <div className="min-w-0 flex-1 text-field break-words">{children}</div>
       {onCopy && (
-        <Button variant="text" size="sm" className="py-0!" aria-label={`Copy the ${label === "To" ? "recipient" : label.toLowerCase()}`} onClick={onCopy}>
+        <Button
+          {...{ [COPY_SKIP]: "" }}
+          variant="text"
+          size="sm"
+          className="py-0! select-none"
+          aria-label={`Copy the ${label === "To" ? "recipient" : label.toLowerCase()}`}
+          onClick={onCopy}
+        >
           Copy
         </Button>
       )}

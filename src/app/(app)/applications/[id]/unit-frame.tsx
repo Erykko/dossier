@@ -1,10 +1,11 @@
 "use client";
 
 import { Popover } from "radix-ui";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { Unit } from "@/lib/application-data";
+import { COPY_SKIP, startCleanCopy } from "@/lib/clean-copy";
 import { cn } from "@/lib/cn";
 import { isBulletUnit } from "@/lib/unit-text";
 
@@ -61,6 +62,9 @@ export function UnitFrame({
   const frame = useRef<HTMLDivElement>(null);
   const wasEditing = useRef(editing);
 
+  // Copying the document gives its text without the toolbars.
+  useEffect(() => startCleanCopy(), []);
+
   // Leaving the editor puts focus back on the unit, not the top of the page.
   useLayoutEffect(() => {
     if (wasEditing.current && !editing && (!document.activeElement || document.activeElement === document.body)) {
@@ -88,15 +92,18 @@ export function UnitFrame({
       {editing && <UnitEditor unit={unit} saving={saving} onCancel={onCancel} onSave={onSave} />}
       {flagged && <CheckThis facts={unit.unverified!} />}
       {busy ? (
-        <span className={cn(styles.status, "rounded-[6px] border border-line-popover bg-card px-2 py-1 font-sans text-[11.5px] leading-[1.2] text-muted")}>
+        <span
+          {...{ [COPY_SKIP]: "" }}
+          className={cn(styles.status, "select-none rounded-[6px] border border-line-popover bg-card px-2 py-1 font-sans text-[11.5px] leading-[1.2] text-muted")}>
           Rewriting…
         </span>
       ) : (
         !editing && (
           <div
+            {...{ [COPY_SKIP]: "" }}
             className={cn(
               styles.toolbar,
-              "gap-0.5 rounded-control bg-inverse p-[3px] font-sans text-xs leading-[1.2] font-medium whitespace-nowrap shadow-toolbar",
+              "select-none gap-0.5 rounded-control bg-inverse p-[3px] font-sans text-xs leading-[1.2] font-medium whitespace-nowrap shadow-toolbar",
             )}
           >
             <button type="button" className={toolButton} onClick={onEdit}>
@@ -184,11 +191,12 @@ function CheckThis({ facts }: { facts: string[] }) {
   return (
     <Popover.Root>
       <Popover.Trigger
+        {...{ [COPY_SKIP]: "" }}
         aria-label={`Check this: ${quoted}`}
         title="Check this"
         className={cn(
           styles.check,
-          "grid size-4 place-items-center rounded-full border border-warning-line bg-warning-surface font-sans text-[11px] leading-none font-bold text-warning",
+          "grid size-4 select-none place-items-center rounded-full border border-warning-line bg-warning-surface font-sans text-[11px] leading-none font-bold text-warning",
         )}
       >
         !
