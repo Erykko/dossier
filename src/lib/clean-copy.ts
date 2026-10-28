@@ -20,6 +20,13 @@ export function cleanSelection(selection: Selection): { text: string; html: stri
   }
   if (!holder.querySelector(`[${COPY_SKIP}]`)) return null;
   for (const skipped of holder.querySelectorAll(`[${COPY_SKIP}]`)) skipped.remove();
+  // Each part of a document (a paragraph of the letter, the email's body) is
+  // a div in the preview; as a paragraph it gets a blank line before the next.
+  for (const part of [...holder.querySelectorAll("[data-unit]")].reverse()) {
+    const paragraph = document.createElement("p");
+    paragraph.append(...part.childNodes);
+    part.replaceWith(paragraph);
+  }
   document.body.append(holder);
   try {
     // innerText keeps the paragraph breaks; jsdom, in tests, only has textContent.

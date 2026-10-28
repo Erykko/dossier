@@ -15,8 +15,8 @@ function selectAll(root: HTMLElement): Selection {
 function letter(): HTMLElement {
   const root = document.createElement("article");
   root.innerHTML = `
-    <div><p>Dear AUQ team,</p><div ${COPY_SKIP}><button>Edit</button><button>Regenerate</button><button>Ask AI</button></div></div>
-    <div><p>A senior WordPress role is the work I enjoy most.</p><span ${COPY_SKIP}>Rewriting…</span></div>`;
+    <div data-unit="greeting"><p>Dear AUQ team,</p><div ${COPY_SKIP}><button>Edit</button><button>Regenerate</button><button>Ask AI</button></div></div>
+    <div data-unit="p1"><p>A senior WordPress role is the work I enjoy most.</p><span ${COPY_SKIP}>Rewriting…</span></div>`;
   document.body.append(root);
   return root;
 }
@@ -34,6 +34,7 @@ describe("clean copy", () => {
       expect(clean.text).not.toContain(ui);
       expect(clean.html).not.toContain(ui);
     }
+    expect(clean.html).toContain("<p><p>Dear AUQ team,</p></p>");
   });
 
   it("leaves a selection without app UI to the browser", () => {
