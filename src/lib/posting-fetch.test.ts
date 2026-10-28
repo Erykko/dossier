@@ -153,4 +153,10 @@ describe("postingFacts (Add a job by link)", () => {
     expect(facts.company).toBe("Acme");
     expect(facts.remote).toBeNull();
   });
+
+  it("leaves a job board's name off the page title", () => {
+    const html = "<html><head><title>WordPress Developer – Plugins &amp; Integrations | WordPress Jobs</title></head><body><h1>WordPress Developer – Plugins &amp; Integrations</h1></body></html>";
+    expect(postingFacts(html).title).toBe("WordPress Developer – Plugins & Integrations");
+    expect(postingFacts("<html><head><title>Plugin Developer | Acme Careers</title></head></html>").title).toBe("Plugin Developer");
+  });
 });

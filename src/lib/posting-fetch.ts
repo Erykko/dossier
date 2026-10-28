@@ -327,8 +327,12 @@ export function postingFacts(html: string): PostingFacts {
     };
   }
   const meta = (name: string) => str(root.querySelector(`meta[property="${name}"], meta[name="${name}"]`)?.getAttribute("content"));
+  const heading = textOf(root.querySelector("h1") ?? parse(""));
+  const pageTitle = meta("og:title") || textOf(root.querySelector("title") ?? parse(""));
+  // "Developer | Some Jobs Board": the main heading is the posting's own title when the page's title holds it.
+  const title = heading && pageTitle.includes(heading) ? heading : pageTitle.replace(/\s+[|·•–—-]\s+[^|·•–—-]+$/, "") || heading;
   return {
-    title: meta("og:title") || textOf(root.querySelector("title") ?? parse("")) || textOf(root.querySelector("h1") ?? parse("")),
+    title,
     company: meta("og:site_name"),
     place: "",
     remote: null,
