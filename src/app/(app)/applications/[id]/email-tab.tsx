@@ -98,7 +98,11 @@ export function EmailTab({
         <Field label="To" onCopy={to ? () => void copy(to, "recipient") : undefined}>
           {renderUnit({
             id: "to",
-            children: to || <span className="text-muted">The posting doesn&apos;t give an address. Edit to add one.</span>,
+            children: to || (
+              <span {...{ [COPY_SKIP]: "" }} className="text-muted select-none">
+                The posting doesn&apos;t give an address. Edit to add one.
+              </span>
+            ),
           })}
         </Field>
         <Field label="Subject" onCopy={subject ? () => void copy(subject, "subject") : undefined}>
@@ -153,7 +157,9 @@ export function EmailTab({
 function Field({ label, onCopy, children }: { label: string; onCopy?: () => void; children: ReactNode }) {
   return (
     <div className="flex items-baseline gap-4 border-b border-line px-7 py-3.5">
-      <span className="w-14 shrink-0 text-meta text-muted">{label}</span>
+      <span {...{ [COPY_SKIP]: "" }} className="w-14 shrink-0 text-meta text-muted select-none">
+        {label}
+      </span>
       <div className="min-w-0 flex-1 text-field break-words">{children}</div>
       {onCopy && (
         <Button
