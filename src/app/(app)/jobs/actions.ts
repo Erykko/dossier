@@ -7,7 +7,9 @@ import { isAiConfigured, isAiUsable } from "@/lib/ai/config";
 import { handOffFoundPosting, handsOffToClaude } from "@/lib/connector/handoff";
 import { loadJobSearchConfig } from "@/lib/job-search/config";
 import { fullText } from "@/lib/job-search/find";
-import { foundPostingSchema, JOB_SOURCES, searchQuerySchema } from "@/lib/job-search/search";
+import { postingFromLink } from "@/lib/job-search/manual";
+import { PostingSource } from "@/generated/prisma/enums";
+import { foundPostingSchema, searchQuerySchema } from "@/lib/job-search/search";
 import { findUnfinishedJobs, startJob } from "@/lib/jobs/runner";
 import { scoreJobKey, scorePostingJob } from "@/lib/jobs/score-posting";
 import { removeSearch, runSearch, showMoreFor } from "@/lib/posting-searches";
@@ -18,7 +20,7 @@ import { saveSettings } from "@/lib/settings-data";
 // Postings come back from the screen as the search gave them, checked
 // against the posting shape.
 
-const postingRef = z.object({ source: z.enum(JOB_SOURCES), externalId: z.string().min(1).max(500) });
+const postingRef = z.object({ source: z.enum(PostingSource), externalId: z.string().min(1).max(500) });
 const searchId = z.string().min(1).max(100);
 
 /** "I understand" under the Bundesagentur für Arbeit's note (#223), for a BA choice made before it, or by DOSSIER_JOBS_SOURCE. */
@@ -48,6 +50,15 @@ export const loadFullText = action(z.object({ posting: foundPostingSchema }), as
 export const savePostingForLater = action(z.object({ posting: foundPostingSchema }), async ({ posting }, { toast }) => {
   const saved = await savePosting(posting);
   toast("Saved for later.");
+  return { postingId: saved.id };
+});
+
+/** "Add a job by link": reads the posting at a link found anywhere and keeps it in Saved. */
+export const addPostingFromLink = action(z.object({ link: z.string().trim().min(1).max(2000) }), async ({ link }, { toast }) => {
+  const found = await postingFromLink(link);
+  if (!found.ok) throw new ActionError(found.error);
+  const saved = await savePosting(found.posting);
+  toast(`Added “${found.posting.title}” to Saved.`);
   return { postingId: saved.id };
 });
 

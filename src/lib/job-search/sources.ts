@@ -1,3 +1,5 @@
+import type { PostingSource } from "@/generated/prisma/enums";
+
 import type { JobSource, JSearchHost } from "./search";
 
 /** What Settings → Job search may know about a source's key: never the key itself. "env" means it comes from the environment. */
@@ -97,7 +99,7 @@ export const ARBEITSAGENTUR_NOTE =
   "and the BA's terms of use don't allow automated access. You choose this source on your own responsibility, and it can stop working at any time.";
 
 /** A BA posting's own page on arbeitsagentur.de, which its results always link to, even when they have a link of their own. */
-export function arbeitsagenturPage(posting: { source: JobSource; externalId: string }): string | null {
+export function arbeitsagenturPage(posting: { source: PostingSource; externalId: string }): string | null {
   return posting.source === "ARBEITSAGENTUR" ? `https://www.arbeitsagentur.de/jobsuche/jobdetail/${encodeURIComponent(posting.externalId)}` : null;
 }
 

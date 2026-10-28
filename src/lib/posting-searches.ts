@@ -7,6 +7,7 @@ import {
   EMPTY_QUERY,
   foundPostingSchema,
   postingKey,
+  searchedSource,
   searchQuerySchema,
   type FoundPosting,
   type PastSearchDay,
@@ -64,7 +65,7 @@ export async function loadSearch(id?: string, { timeZone, now = new Date() }: { 
   if (!search) return null;
   return {
     id: search.id,
-    source: search.source,
+    source: searchedSource(search.source),
     query: queryOf(search.query),
     ranAt: ranAtLabel(search.createdAt, timeZone, now),
     postings: await withStates(postingsOf(search.postings)),
@@ -77,7 +78,7 @@ export async function showMoreFor(id: string): Promise<{ ok: true; postings: Sho
   const search = await prisma.postingSearch.findUnique({ where: { id } });
   if (!search) return { ok: false, problem: "changed", message: "That search is no longer kept. Search again." };
   if (!search.next) return { ok: true, postings: [], next: null };
-  const answer = await askSource(queryOf(search.query), { source: search.source, next: search.next });
+  const answer = await askSource(queryOf(search.query), { source: searchedSource(search.source), next: search.next });
   if (!answer.ok) return answer;
   const kept = postingsOf(search.postings);
   const seen = new Set(kept.map(postingKey));
@@ -98,7 +99,7 @@ export async function listSearches({ timeZone, now = new Date() }: { timeZone?: 
     const ago = daysBetween(search.createdAt, now, timeZone);
     const day = ago === 0 ? "Today" : ago === 1 ? "Yesterday" : formatDay(search.createdAt, timeZone, now);
     if (days.at(-1)?.day !== day) days.push({ day, searches: [] });
-    days.at(-1)!.searches.push({ id: search.id, source: search.source, query: queryOf(search.query), found: search.found, time: formatTime(search.createdAt, timeZone) });
+    days.at(-1)!.searches.push({ id: search.id, source: searchedSource(search.source), query: queryOf(search.query), found: search.found, time: formatTime(search.createdAt, timeZone) });
   }
   return days;
 }

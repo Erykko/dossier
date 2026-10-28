@@ -5,7 +5,7 @@ import { gzipSync } from "node:zlib";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { FETCH_MESSAGES, fetchPosting, guardedLookup, isPublicAddress, postingFromHtml } from "./posting-fetch";
+import { FETCH_MESSAGES, fetchPosting, guardedLookup, isPublicAddress, postingFacts, postingFromHtml } from "./posting-fetch";
 
 const DESCRIPTION = "We're looking for a senior product designer to own our payout flows end to end. ".repeat(4);
 
@@ -121,5 +121,36 @@ describe("fetchPosting (E7-8)", () => {
   it("refuses a name that resolves to a private address, when connecting", async () => {
     const error = await new Promise((resolve) => guardedLookup("localhost", {}, (failure) => resolve(failure)));
     expect(error).toMatchObject({ code: "EPRIVATE" });
+  });
+});
+
+describe("postingFacts (Add a job by link)", () => {
+  it("takes the title, company and facts from JobPosting data", () => {
+    const data = {
+      "@context": "https://schema.org",
+      "@type": "JobPosting",
+      title: "Senior WordPress Developer",
+      hiringOrganization: { "@type": "Organization", name: "AUQ" },
+      jobLocation: { address: { addressLocality: "Austin", addressRegion: "TX", addressCountry: "US" } },
+      jobLocationType: "TELECOMMUTE",
+      datePosted: "2026-10-20",
+      baseSalary: { currency: "USD", value: { minValue: 90000, maxValue: 120000, unitText: "YEAR" } },
+    };
+    const facts = postingFacts(`<html><head><title>Jobs | AUQ</title><script type="application/ld+json">${JSON.stringify(data)}</script></head></html>`);
+    expect(facts).toEqual({
+      title: "Senior WordPress Developer",
+      company: "AUQ",
+      place: "Austin, TX, US",
+      remote: true,
+      salary: "USD 90000–120000 per year",
+      postedAt: "2026-10-20T00:00:00.000Z",
+    });
+  });
+
+  it("falls back to the page's title and site name", () => {
+    const facts = postingFacts('<html><head><title>WordPress Developer</title><meta property="og:site_name" content="Acme"></head><body><h1>Other</h1></body></html>');
+    expect(facts.title).toBe("WordPress Developer");
+    expect(facts.company).toBe("Acme");
+    expect(facts.remote).toBeNull();
   });
 });

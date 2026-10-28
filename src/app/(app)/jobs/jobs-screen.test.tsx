@@ -8,6 +8,7 @@ import { EMPTY_QUERY, type PostingState, type ShownPosting, type StoredSearch } 
 
 import {
   acceptArbeitsagenturNote,
+  addPostingFromLink,
   dismissFoundPosting,
   loadFullText,
   removeJobSearch,
@@ -26,6 +27,7 @@ vi.mock("next/link", () => ({ default: ({ href, ...props }: ComponentProps<"a">)
 vi.mock("@/components/toast", () => ({ toast: vi.fn(), toastResult: (result: unknown) => result }));
 vi.mock("./actions", () => ({
   acceptArbeitsagenturNote: vi.fn(),
+  addPostingFromLink: vi.fn(),
   startApplicationFrom: vi.fn(),
   runJobSearch: vi.fn(),
   removeJobSearch: vi.fn(),
@@ -476,5 +478,34 @@ describe("the Saved and Dismissed views (E14-7)", () => {
     expect(restorePosting).toHaveBeenCalledWith({ source: "JSEARCH", externalId: "a", saved: false });
     expect(toast).toHaveBeenCalledWith("Brought back. It'll show in your searches again.");
     expect(screen.queryByRole("button", { name: /^Designer a/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Add a job by link", () => {
+  it("reads the link, then shows Saved", async () => {
+    vi.mocked(addPostingFromLink).mockResolvedValue({ ok: true, data: { postingId: "p1" }, toast: "Added “WordPress Developer” to Saved." });
+    renderScreen();
+    await userEvent.type(screen.getByRole("textbox", { name: "Add a job by link" }), "https://jobs.example/wp-dev");
+    await userEvent.click(screen.getByRole("button", { name: "Add job" }));
+    await waitFor(() => expect(addPostingFromLink).toHaveBeenCalledWith({ link: "https://jobs.example/wp-dev" }));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/jobs?view=saved", { scroll: false }));
+    expect(screen.getByRole("textbox", { name: "Add a job by link" })).toHaveValue("");
+  });
+
+  it("asks for a web address before reading anything", async () => {
+    renderScreen();
+    await userEvent.type(screen.getByRole("textbox", { name: "Add a job by link" }), "not a link");
+    await userEvent.click(screen.getByRole("button", { name: "Add job" }));
+    expect(addPostingFromLink).not.toHaveBeenCalled();
+    expect(screen.getByText("Paste the posting's web address, starting with https://.")).toBeInTheDocument();
+  });
+
+  it("says under the field why a page couldn't be read", async () => {
+    vi.mocked(addPostingFromLink).mockResolvedValue({ ok: false, error: "That page didn't answer." });
+    renderScreen({ view: "saved", kept: [] });
+    await userEvent.type(screen.getByRole("textbox", { name: "Add a job by link" }), "https://jobs.example/gone");
+    await userEvent.click(screen.getByRole("button", { name: "Add job" }));
+    expect(await screen.findByText("That page didn't answer.")).toBeInTheDocument();
+    expect(router.push).not.toHaveBeenCalled();
   });
 });

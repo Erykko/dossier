@@ -8,6 +8,7 @@ import { ArbeitsagenturNote } from "@/components/arbeitsagentur-note";
 import { PageHeader } from "@/components/page-header";
 import { toast, toastResult } from "@/components/toast";
 import { Button, buttonClassName } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
 import type { Country } from "@/lib/job-search/countries";
 import {
@@ -24,7 +25,7 @@ import {
 } from "@/lib/job-search/search";
 import { SOURCE_INFO } from "@/lib/job-search/sources";
 
-import { acceptArbeitsagenturNote, runJobSearch } from "./actions";
+import { acceptArbeitsagenturNote, addPostingFromLink, runJobSearch } from "./actions";
 import { PastSearches } from "./past-searches";
 import { PostingResults } from "./posting-results";
 import { RemoteOnlyField, SearchFields, uncoveredCountry } from "./search-fields";
@@ -84,6 +85,7 @@ export function JobsScreen({
         description={`Search ${source ? SOURCE_INFO[source].name : "job postings"} for postings near you, then start an application from the one you like.`}
       />
       <ViewTabs view={view} counts={counts} />
+      <AddByLink />
     </>
   );
 
@@ -220,6 +222,53 @@ function SearchForm({
           {pending ? "Searching…" : "Search"}
         </Button>
       </div>
+    </form>
+  );
+}
+
+/**
+ * "Add a job by link": a posting found anywhere, read from its page and kept
+ * in Saved, where an application can be started from it like any other.
+ */
+function AddByLink() {
+  const router = useRouter();
+  const [link, setLink] = useState("");
+  const [error, setError] = useState<string | undefined>();
+  const [adding, startAdding] = useTransition();
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (adding) return;
+    const trimmed = link.trim();
+    if (!/^https?:\/\/\S+$/i.test(trimmed)) return setError("Paste the posting's web address, starting with https://.");
+    setError(undefined);
+    startAdding(async () => {
+      const result = await addPostingFromLink({ link: trimmed });
+      // The reason goes under the field, where the link can be fixed.
+      if (!result.ok) return setError(result.error);
+      toastResult(result);
+      setLink("");
+      router.push(viewHref("saved"), { scroll: false });
+      router.refresh();
+    });
+  };
+
+  return (
+    <form aria-label="Add a job by link" noValidate onSubmit={submit} className="mx-10 mb-6 flex flex-wrap items-end gap-3">
+      <Input
+        label="Add a job by link"
+        hint="A posting you found anywhere: it's read from its page and kept in Saved, ready to start an application from."
+        type="url"
+        inputMode="url"
+        placeholder="https://"
+        value={link}
+        error={error}
+        onChange={(event) => setLink(event.target.value)}
+        className="min-w-[260px] flex-1"
+      />
+      <Button type="submit" variant="secondary" aria-disabled={adding || undefined}>
+        {adding ? "Adding…" : "Add job"}
+      </Button>
     </form>
   );
 }

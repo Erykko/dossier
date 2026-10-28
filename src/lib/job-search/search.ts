@@ -13,7 +13,14 @@ import { countryCodeFor } from "./countries";
 
 /** The job sources Dossier can search (E14-1 to E14-3), in the order Settings lists them; one is chosen there. */
 export const JOB_SOURCES = [PostingSource.JSEARCH, PostingSource.ADZUNA, PostingSource.ARBEITSAGENTUR] as const;
-export type JobSource = PostingSource;
+/** The sources Find jobs searches; a posting can also be added by hand (MANUAL). */
+export type JobSource = (typeof JOB_SOURCES)[number];
+
+/** A stored search's or agent candidate's source: always one Find jobs searches, never a posting added by hand. */
+export function searchedSource(source: PostingSource): JobSource {
+  if (source === PostingSource.MANUAL) throw new Error("A search can't come from a posting added by hand.");
+  return source;
+}
 
 /** Where a JSearch key comes from: OpenWeb Ninja directly, or the RapidAPI marketplace. */
 export const JSEARCH_HOSTS = ["openwebninja", "rapidapi"] as const;
@@ -63,8 +70,8 @@ export const EMPTY_QUERY: SearchQuery = {
 
 /** A posting as a source found it, in one shape for every source. */
 export const foundPostingSchema = z.object({
-  source: z.enum(JOB_SOURCES),
-  /** The source's own id for it. */
+  source: z.enum(PostingSource),
+  /** The source's own id for it; a posting added by hand uses its link. */
   externalId: z.string().min(1).max(500),
   title: z.string().max(500),
   company: z.string().max(300),
@@ -138,7 +145,7 @@ export function describeSearch(query: SearchQuery, countryName: string): string 
 }
 
 /** Identifies a posting across searches. */
-export const postingKey = (posting: { source: JobSource; externalId: string }) => `${posting.source}:${posting.externalId}`;
+export const postingKey = (posting: { source: PostingSource; externalId: string }) => `${posting.source}:${posting.externalId}`;
 
 /** A link from a source, kept only when it's a web address, so it can't run script as an href. */
 export function safeLink(value: string | null | undefined): string {

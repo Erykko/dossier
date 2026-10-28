@@ -297,6 +297,46 @@ function jobPostingText(posting: JobPosting): string {
   return [[company, title].filter(Boolean).join(": "), facts.join(" · "), description].filter(Boolean).join("\n\n");
 }
 
+/** What a posting page says about itself, for one added by hand from its link. */
+export type PostingFacts = { title: string; company: string; place: string; remote: boolean | null; salary: string; postedAt: string | null };
+
+/**
+ * A posting page's title, company and facts: from its JobPosting data when it
+ * has any, else from the page's own title and site name. Empty where it says
+ * nothing.
+ */
+export function postingFacts(html: string): PostingFacts {
+  const root = parse(html, { blockTextElements: { script: true, style: false, noscript: false, pre: false } });
+  for (const script of root.querySelectorAll('script[type="application/ld+json"]')) {
+    const posting = jobPostingIn(parseJson(script.rawText));
+    if (!posting) continue;
+    const places = [posting.jobLocation].flat().flatMap((place) => {
+      const address = place && typeof place === "object" ? (place as Record<string, unknown>).address : null;
+      if (!address || typeof address !== "object") return [];
+      const parts = address as Record<string, unknown>;
+      return [[str(parts.addressLocality), str(parts.addressRegion), nameOf(parts.addressCountry)].filter(Boolean).join(", ")];
+    });
+    const posted = Date.parse(str(posting.datePosted));
+    return {
+      title: htmlText(str(posting.title)),
+      company: nameOf(posting.hiringOrganization),
+      place: [...new Set(places.filter(Boolean))].join(" / "),
+      remote: str(posting.jobLocationType) === "TELECOMMUTE" ? true : null,
+      salary: salaryOf(posting.baseSalary),
+      postedAt: Number.isNaN(posted) ? null : new Date(posted).toISOString(),
+    };
+  }
+  const meta = (name: string) => str(root.querySelector(`meta[property="${name}"], meta[name="${name}"]`)?.getAttribute("content"));
+  return {
+    title: meta("og:title") || textOf(root.querySelector("title") ?? parse("")) || textOf(root.querySelector("h1") ?? parse("")),
+    company: meta("og:site_name"),
+    place: "",
+    remote: null,
+    salary: "",
+    postedAt: null,
+  };
+}
+
 /** "EUR 75000–90000 per year" from schema.org's MonetaryAmount. */
 function salaryOf(value: unknown): string {
   if (!value || typeof value !== "object") return "";

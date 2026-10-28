@@ -1,13 +1,13 @@
+import type { PostingSource } from "@/generated/prisma/enums";
 import { cn } from "@/lib/cn";
-import type { JobSource } from "@/lib/job-search/search";
 import { attributionHref, SOURCE_INFO } from "@/lib/job-search/sources";
 
 /** At least 116 × 23 px, as Adzuna's terms ask of its label. */
 const badge = "inline-flex min-h-[23px] min-w-[116px] shrink-0 items-center justify-center rounded-full border border-line-strong px-2.5 py-0.5 text-xs font-medium";
 
 /** Whether a source's postings each carry a linked label, rather than plain text or nothing. */
-export function linksAttribution(source: JobSource): boolean {
-  return SOURCE_INFO[source].attributionLink !== null;
+export function linksAttribution(source: PostingSource): boolean {
+  return source !== "MANUAL" && SOURCE_INFO[source].attributionLink !== null;
 }
 
 /**
@@ -16,7 +16,9 @@ export function linksAttribution(source: JobSource): boolean {
  * only takes the badge's room, for a card the badge lies over (a button
  * can't hold a link).
  */
-export function SourceAttribution({ source, url, placeholder, className }: { source: JobSource; url: string; placeholder?: boolean; className?: string }) {
+export function SourceAttribution({ source, url, placeholder, className }: { source: PostingSource; url: string; placeholder?: boolean; className?: string }) {
+  // A posting added by hand came from no job source.
+  if (source === "MANUAL") return null;
   const text = SOURCE_INFO[source].attribution;
   const href = attributionHref(source, url);
   if (!text) return null;

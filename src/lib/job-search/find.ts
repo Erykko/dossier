@@ -36,6 +36,8 @@ export async function askSource(
  */
 export async function fullText(posting: FoundPosting): Promise<string | null> {
   if (posting.complete) return posting.description;
+  // Added by hand: there's no source to ask again.
+  if (posting.source === "MANUAL") return null;
   try {
     return await postingDetails(posting.source, credentialsFor(await loadJobSearchConfig(), posting.source), posting, requestContext(posting.source));
   } catch (error) {
